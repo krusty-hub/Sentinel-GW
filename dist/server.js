@@ -26,6 +26,13 @@ export function buildServer(options) {
     const app = Fastify({
         logger: false, // We use custom StructuredLogger according to PRD
     });
+    // Transparent gateway body forwarding: pass raw bytes directly to upstream without breaking
+    app.addContentTypeParser('*', { parseAs: 'buffer' }, (_req, body, done) => {
+        done(null, body);
+    });
+    app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {
+        done(null, body);
+    });
     // Prometheus scrape endpoint
     app.get('/metrics', async (_req, reply) => {
         if (options.circuitBreaker) {

@@ -53,16 +53,26 @@ routes:
   - id: "payments_api"
     path_prefix: "/api/v1/payments"
     methods: ["POST", "GET"]
-    upstream_url: "http://127.0.0.1:4001"
+    upstream_url: "http://127.0.0.1:4000"
     identity_source: "api_key"
     tier_based: true
 
   - id: "webhook_ingest"
     path_prefix: "/api/v1/webhooks"
     methods: ["POST"]
-    upstream_url: "http://127.0.0.1:4002"
+    upstream_url: "http://127.0.0.1:4000"
     identity_source: "api_key"
     override_policy:
       algorithm: "leaky_bucket"
       capacity: 50
       leak_rate_per_sec: 10.0
+
+  - id: "live_site_test"
+    path_prefix: "/json"
+    methods: ["GET"]
+    upstream_url: "https://httpbin.org"
+    identity_source: "ip"
+    override_policy:
+      algorithm: "token_bucket"
+      capacity: 5
+      refill_rate_per_sec: 1.0

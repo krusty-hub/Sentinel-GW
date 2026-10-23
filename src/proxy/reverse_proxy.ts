@@ -31,17 +31,21 @@ export class ReverseProxy {
     reply.header('X-RateLimit-Reset', rateLimitResult.resetEpochSec.toString());
     reply.header('X-RateLimit-Policy', rateLimitResult.policyDescription);
 
-    const targetUrl = new URL(req.url, route.upstream_url);
+    const targetUrl = route.id === 'dynamic_proxy'
+      ? new URL(route.upstream_url)
+      : new URL(req.url, route.upstream_url);
     const method = req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
 
     // Filter headers to forward
     const headers: Record<string, string> = {};
     for (const [key, value] of Object.entries(req.headers)) {
-      if (value !== undefined && key !== 'host' && key !== 'connection') {
+      const lower = key.toLowerCase();
+      if (value !== undefined && lower !== 'host' && lower !== 'connection' && lower !== 'accept-encoding') {
         headers[key] = Array.isArray(value) ? value.join(', ') : value;
       }
     }
-    // Inject proxy headers
+    // Set correct host header for external sites and virtual hosts
+    headers['host'] = targetUrl.host;
     headers['x-forwarded-host'] = req.hostname;
     headers['x-gateway-route'] = route.id;
 
@@ -71,7 +75,15 @@ export class ReverseProxy {
 
       // Copy response headers
       for (const [key, value] of Object.entries(response.headers)) {
-        if (value !== undefined && key !== 'connection' && key !== 'transfer-encoding') {
+        const lowerKey = key.toLowerCase();
+        if (
+          value !== undefined &&
+          lowerKey !== 'connection' &&
+          lowerKey !== 'transfer-encoding' &&
+          lowerKey !== 'content-length' &&
+          lowerKey !== 'content-encoding' &&
+          !lowerKey.startsWith('x-ratelimit-')
+        ) {
           reply.header(key, value);
         }
       }

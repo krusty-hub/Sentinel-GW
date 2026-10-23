@@ -7,10 +7,12 @@
   "scripts": {
     "build": "tsc && node --input-type=module -e \"import fs from 'node:fs'; fs.cpSync('src/limiter/scripts', 'dist/limiter/scripts', {recursive: true, force: true});\"",
     "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --include config/config.yaml src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "benchmark": "tsx test/load/benchmark.ts"
+    "benchmark": "tsx test/load/benchmark.ts",
+    "cli": "tsx src/cli.ts",
+    "fetch": "tsx src/cli.ts"
   },
   "keywords": [
     "rate-limiter",

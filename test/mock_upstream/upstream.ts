@@ -9,6 +9,13 @@ export function createMockUpstreamServer(port: number): Promise<http.Server> {
       });
 
       req.on('end', () => {
+        let parsedBody: unknown = undefined;
+        try {
+          if (body) parsedBody = JSON.parse(body);
+        } catch {
+          parsedBody = body;
+        }
+
         res.writeHead(200, {
           'Content-Type': 'application/json',
           'X-Mock-Upstream': 'true',
@@ -18,7 +25,7 @@ export function createMockUpstreamServer(port: number): Promise<http.Server> {
             status: 'success',
             received_url: req.url,
             received_method: req.method,
-            body: body ? JSON.parse(body) : undefined,
+            body: parsedBody,
           })
         );
       });
@@ -30,7 +37,7 @@ export function createMockUpstreamServer(port: number): Promise<http.Server> {
   });
 }
 
-if (process.argv[1] && process.argv[1].endsWith('upstream.ts')) {
+if (process.argv[1] && /upstream\.(ts|js)$/i.test(process.argv[1])) {
   const port = parseInt(process.env.PORT || '4000', 10);
   createMockUpstreamServer(port).then(() => {
     console.log(`[Mock Upstream] Running on port ${port}`);

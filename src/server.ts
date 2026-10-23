@@ -43,6 +43,14 @@ export function buildServer(options: CreateServerOptions): FastifyInstance {
     logger: false, // We use custom StructuredLogger according to PRD
   });
 
+  // Transparent gateway body forwarding: pass raw bytes directly to upstream without breaking
+  app.addContentTypeParser('*', { parseAs: 'buffer' }, (_req, body, done) => {
+    done(null, body);
+  });
+  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {
+    done(null, body);
+  });
+
   // Prometheus scrape endpoint
   app.get('/metrics', async (_req: FastifyRequest, reply: FastifyReply) => {
     if (options.circuitBreaker) {
@@ -85,7 +93,45 @@ export function buildServer(options: CreateServerOptions): FastifyInstance {
 
   // Catch-all route handler for API proxying & rate limiting
   app.all('/*', async (req: FastifyRequest, reply: FastifyReply) => {
-    const matchedRoute = findMatchingRoute(req.url, req.method, currentConfig.routes);
+    const parsedPath = req.url.split('?')[0];
+    let matchedRoute: RouteConfig | undefined;
+
+    if (parsedPath === '/proxy') {
+      const targetQueryUrl = (req.query as Record<string, string>)?.url;
+      if (!targetQueryUrl) {
+        return reply.status(400).send({
+          error: {
+            code: 'MISSING_URL',
+            message: 'Please provide a URL parameter, e.g. http://127.0.0.1:8080/proxy?url=https://jsonplaceholder.typicode.com/todos/1',
+          },
+        });
+      }
+      try {
+        new URL(targetQueryUrl);
+      } catch {
+        return reply.status(400).send({
+          error: {
+            code: 'INVALID_URL',
+            message: `The provided URL "${targetQueryUrl}" is not valid. Please include http:// or https://`,
+          },
+        });
+      }
+
+      matchedRoute = {
+        id: 'dynamic_proxy',
+        path_prefix: '/proxy',
+        methods: ['*'],
+        upstream_url: targetQueryUrl,
+        identity_source: 'ip',
+        override_policy: {
+          algorithm: 'token_bucket',
+          capacity: 5,
+          refill_rate_per_sec: 1.0,
+        },
+      };
+    } else {
+      matchedRoute = findMatchingRoute(req.url, req.method, currentConfig.routes);
+    }
 
     if (!matchedRoute) {
       return reply.status(404).send({

@@ -35,9 +35,20 @@ export class RedisLimiter {
                 maxRetriesPerRequest: 1,
                 enableOfflineQueue: false,
                 lazyConnect: true,
+                retryStrategy: (times) => {
+                    if (times >= 3) {
+                        // Redis offline; back off to 10s to match recovery window
+                        return 10000;
+                    }
+                    return Math.min(times * 300, 2000);
+                },
             });
             this.isExternalRedis = false;
         }
+        // Attach error listener to prevent Node.js unhandled error events
+        this.redis.on('error', (_err) => {
+            this.circuitBreaker.recordFailure();
+        });
         const scriptsPath = options.scriptsDir ?? path.join(__dirname, 'scripts');
         this.loadScriptFiles(scriptsPath);
     }
